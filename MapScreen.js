@@ -2,12 +2,14 @@ import React,{useEffect,useState} from 'react';
 import{StyleSheet,View,Text,ActivityIndicator,Platform} from 'react-native';
 import {collection,query,where,onSnapshot} from 'firebase/firestore';
 import {db} from '../firebaseConfig';
-let MapView, Marker;
+let MapView, Marker,Callout;
 if (Platform.OS !=='web'){
     try{
     const Maps=require('react-native-maps');
     MapView=Maps.default;
-    Marker=Maps.Marker;}
+    Marker=Maps.Marker;
+    Callout=Maps.Callout;
+    }
     catch(e){
         console.warn("Maps could not be loaded.");
     }
@@ -16,7 +18,8 @@ const MapScreen=()=>{
     const[vendors,setVendors]=useState([]);
     const[loading,setLoading]=useState(true);
     useEffect(()=>{
-    const q=query(collection(db,'users',where('isOnline','==',true)));
+        if (!db) return;
+    const q=query(collection(db,'users'),where('isOnline','==',true));
     const unsubscribe=onSnapshot(q,(snapshot)=>{
         const activeVendors=[];
         snapshot.forEach((doc)=>{
@@ -70,7 +73,7 @@ return(
                     >
                         <Callout>
                             <View style={styles.callout}>
-                            <Text style={styles.vendorName}>{vendor.email.plit('@')[0]}</Text>
+                            <Text style={styles.vendorName}>{vendor.email.split('@')[0]}</Text>
                             <Text style={styles.vendorStatus}>Live Now</Text>
                             <Text style={styles.tapText}>Tap to view menu</Text>
                             </View>

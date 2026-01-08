@@ -31,13 +31,27 @@ const UserScreen=()=>{
     const{logOut}=useAuth();
     const [showMiniMap,setShowMiniMap]=useState(false)
     const setHomeLocation=async()=>{
+        try{
         let {status}=await Location.requestForegroundPermissionsAsync();
+        console.log('Your location has been updated')
             if(status!=='granted') return Alert.alert("Error","Permission denied");
-            let loc=await Location.getCurrentPositionAsync({});
-            await updateDoc(doc(db,'users',auth.currentUser.uid)),{
-                homeLocation:{latitude:loc.coords.latitude,longitude:loc.coords.longitude}
-            }
+            let location=await Location.getCurrentPositionAsync({});
+            const coords={
+                latitude:location.coords.latitude,
+                longitude:location.coords.longitude
+            };
+            const userRef=doc(db,'users',auth.currentUser.uid);
+            await updateDoc(userRef,{
+                location:{latitude:location.coords.latitude,longitude:location.coords.longitude},
+                locationTimestamp:new Date().toISOString()
+            })
+            console.log("test")
             Alert.alert("Success","Home location set for Geofencing!");
+        }
+        catch(error){
+            console.error("Error saving location:",error);
+            alert('Failed to save location. Check console.');
+        }
     }
         const[menuItems,setMenuItems]=useState([]);
         useEffect(()=>{
@@ -61,14 +75,14 @@ const UserScreen=()=>{
                     <Text style={styles.welcomeText}>Hungry?</Text>
                     <Text style={styles.title}>Browse Menu</Text>
                     </View>
-                    <TouchableOpacity style={styles.locBtn} onPress={setHomeLocation}>
-                        <Text style={styles.locText}>📍Set my Home Location</Text>
-                    </TouchableOpacity>
                     <TouchableOpacity style={styles.logoutButton}
                     onPress={logOut}>
                         <Text style={styles.logoutText}>Logout</Text>
                     </TouchableOpacity>
                 </View>
+                <TouchableOpacity style={styles.locBtn} onPress={setHomeLocation}>
+                        <Text style={styles.locText}>📍Set my Home Location</Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                         style={styles.mapToggleButton}
                         onPress={()=>setShowMiniMap(!showMiniMap)}
