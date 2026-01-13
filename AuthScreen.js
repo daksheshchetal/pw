@@ -129,7 +129,7 @@ const AuthScreen=()=>{
         </TouchableOpacity>
         {Platform.OS=='ios'&&(
             <AppleAuthentication.AppleAuthenticationButton
-            buttonType={AppleAuthentication.AppleAuthenticationButtomType.SIGN_IN}
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
             buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
             style={{width:250,height:44,marginTop:10}}
             onPress={appleLogin}
