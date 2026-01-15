@@ -25,6 +25,10 @@ export function AuthProvider({children}){
     const [currentUser, setCurrentUser]=useState(null);
     const [isVendor, setIsVendor]=useState(false);
     const[loading, setLoading]=useState(true); 
+    const [request, response, promptAsync] = Google.useAuthRequest({
+        expoClientId: 'YOUR_EXPO_CLIENT_ID',
+        // Add android and ios client IDs if you have them
+    });
     //Making the authorisation functions that link to firebase database
     const signUp=async(email,password,role='customer')=>{
         const res=await createUserWithEmailAndPassword(auth,email,password);
@@ -66,39 +70,54 @@ export function AuthProvider({children}){
         })
         return unsubscribe;
     },[])
-    const googleLogin=async()=>{
-        const[request,response,promptAsync]=Google.useAuthRequest({
-            expoClientId:'YOUR_EXPO_CLIENT_ID',
-        });
-        const result=await promptAsync();
-        if (result?.type==='success'){
-            const credential=
-            GoogleAuthProvider.credential(result.params.id_token);
-            const userCredential=await signInWithCredential(auth,credential);
-            const ref=doc(db,'users',userCredential.user.uid);
-            const snap=await getDoc(ref);
-            if(!snap.exists()){
-                await setDoc(ref,{role:'customer',createdAt:new Date()});
+    const googleLogin = async () => {
+        try {
+            // 2. Call promptAsync inside the function
+            const result = await promptAsync();
+            
+            if (result?.type === 'success') {
+                const { id_token } = result.params;
+                const credential = GoogleAuthProvider.credential(id_token);
+                const userCredential = await signInWithCredential(auth, credential);
+                
+                const ref = doc(db, 'users', userCredential.user.uid);
+                const snap = await getDoc(ref);
+                if (!snap.exists()) {
+                    await setDoc(ref, { role: 'customer', createdAt: new Date() });
+                }
             }
+        } catch (error) {
+            console.error("Google Login Error:", error);
         }
-    }
-    const appleLogin=async()=>{
-        if (Platform.OS!=='ios') return;
-        const credential=await AppleAuthentication.signInAsync({
-            requestedScopes:[
+    };
+    const appleLogin = async () => {
+    if (Platform.OS !== 'ios') return;
+    try {
+        const credential = await AppleAuthentication.signInAsync({
+            requestedScopes: [
                 AppleAuthentication.AppleAuthenticationScope.EMAIL,
                 AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
             ],
         });
-        const provider=new GoogleAuthProvider();
-        await signInWithCredential(auth,provider.credential(credential.identityToken));
-        //Save role if new user
-        const ref=doc(db,'users',auth.currentUser.uid);
-        const snap=await getDoc(ref);
-        if(!snap.exists()){
-            await setDoc(ref,{role:'customer',createdAt:new Date()});
+
+        // FIX: Use OAuthProvider for Apple, NOT GoogleAuthProvider
+        const provider = new OAuthProvider('apple.com');
+        const authCredential = provider.credential({
+            idToken: credential.identityToken,
+        });
+
+        const userCredential = await signInWithCredential(auth, authCredential);
+
+        // Save role if new user
+        const ref = doc(db, 'users', userCredential.user.uid);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) {
+            await setDoc(ref, { role: 'customer', createdAt: new Date() });
         }
+    } catch (e) {
+        console.error("Apple Login Error:", e);
     }
+};
     const sendOTP=async(phoneNumber)=>{
         try{
             //Configure invisible reCAPTCHA
