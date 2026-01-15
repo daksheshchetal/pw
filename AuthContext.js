@@ -53,38 +53,39 @@ export function AuthProvider({children}){
     }
     const logOut=()=>{return signOut(auth)}
     //Change the state of the component to unsubscribe
-    useEffect(()=>{
-        const unsubscribe=onAuthStateChanged(auth,async(user)=>{
-            if (user){
-                const docRef=doc(db,'users',user.uid);
-                const docSnap=await getDoc(docRef);
-                if (docSnap.exists()){
-                    const userData=docSnap.data();
-                    setIsVendor(userData.role==='vendor');
-                } else{
-                    setIsVendor(false);
+    useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        try {
+            if (user) {
+                const docRef = doc(db, 'users', user.uid);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setIsVendor(docSnap.data().role === 'vendor');
                 }
             }
             setCurrentUser(user);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            // This MUST run to remove the white screen
             setLoading(false);
-        })
-        return unsubscribe;
-    },[])
-    const googleLogin = async () => {
-        try {
-            // 2. Call promptAsync inside the function
-            const result = await promptAsync();
-            
-            if (result?.type === 'success') {
-                const { id_token } = result.params;
-                const credential = GoogleAuthProvider.credential(id_token);
-                const userCredential = await signInWithCredential(auth, credential);
-                
-                const ref = doc(db, 'users', userCredential.user.uid);
-                const snap = await getDoc(ref);
-                if (!snap.exists()) {
-                    await setDoc(ref, { role: 'customer', createdAt: new Date() });
-                }
+        }
+    });
+    return unsubscribe;
+}, []);
+    const googleLogin=async()=>{
+        const[request,response,promptAsync]=Google.useAuthRequest({
+            expoClientId:'YOUR_EXPO_CLIENT_ID',
+        });
+        const result=await promptAsync();
+        if (result?.type==='success'){
+            const credential=
+            GoogleAuthProvider.credential(result.params.id_token);
+            const userCredential=await signInWithCredential(auth,credential);
+            const ref=doc(db,'users',userCredential.user.uid);
+            const snap=await getDoc(ref);
+            if(!snap.exists()){
+                await setDoc(ref,{role:'customer',createdAt:new Date()});
             }
         } catch (error) {
             console.error("Google Login Error:", error);
