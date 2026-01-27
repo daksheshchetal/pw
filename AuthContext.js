@@ -26,7 +26,9 @@ export function AuthProvider({children}){
     const [isVendor, setIsVendor]=useState(false);
     const[loading, setLoading]=useState(true); 
     const [request, response, promptAsync] = Google.useAuthRequest({
-        expoClientId: 'YOUR_EXPO_CLIENT_ID',
+        expoClientId: '741920079969-shfcjka54slncmjhetb0m023b0fgn168.apps.googleusercontent.com',
+        iosClientId:'741920079969-o56gu4c5cur60ctfcgp2cpb75ld2sgjp.apps.googleusercontent.com',
+        androidClientId:"741920079969-h8dkjg7qsdf0mtgfcors4qrhf5v3i5no.apps.googleusercontent.com"
         // Add android and ios client IDs if you have them
     });
     //Making the authorisation functions that link to firebase database
@@ -74,9 +76,7 @@ export function AuthProvider({children}){
     return unsubscribe;
 }, []);
     const googleLogin=async()=>{
-        const[request,response,promptAsync]=Google.useAuthRequest({
-            expoClientId:'YOUR_EXPO_CLIENT_ID',
-        });
+        try {
         const result=await promptAsync();
         if (result?.type==='success'){
             const credential=
@@ -87,7 +87,7 @@ export function AuthProvider({children}){
             if(!snap.exists()){
                 await setDoc(ref,{role:'customer',createdAt:new Date()});
             }
-        } catch (error) {
+        }} catch (error) {
             console.error("Google Login Error:", error);
         }
     };
@@ -161,5 +161,3 @@ export function AuthProvider({children}){
         </AuthContext.Provider>
     )
 }
-
-
