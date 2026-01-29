@@ -1,4 +1,4 @@
-import React, {createContext,useContext,useEffect,useState} from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
@@ -6,58 +6,36 @@ import {
     signOut,
     GoogleAuthProvider,
     signInWithPhoneNumber,
-    RecaptchaVerifier, 
+    RecaptchaVerifier,
     signInWithCredential,
-    PhoneAuthProvider,
-    OAuthProvider
-} from 'firebase/auth'; 
+    initializeAuth,
+    getReactNativePersistence
+} from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Google from 'expo-auth-session/providers/google';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import {auth,db} from '../firebaseConfig';
-import { getDoc,setDoc,doc,getFirestore } from 'firebase/firestore';
-const AuthContext=createContext(); //Create the Context
-//Create a custom function to the use the Auth content
-export function useAuth(){
-    return useContext(AuthContext); 
+import { auth as authInstance, db } from '../firebaseConfig';
+import { getDoc, setDoc, doc } from 'firebase/firestore';
+import { Platform } from 'react-native';
+
+const AuthContext = createContext();
+
+export function useAuth() {
+    return useContext(AuthContext);
 }
-//Creating the component to provide authentication
-export function AuthProvider({children}){
-    const [currentUser, setCurrentUser]=useState(null);
-    const [isVendor, setIsVendor]=useState(false);
-    const[loading, setLoading]=useState(true); 
+
+export function AuthProvider({ children }) {
+    const [currentUser, setCurrentUser] = useState(null);
+    const [isVendor, setIsVendor] = useState(false);
+    const [loading, setLoading] = useState(true);
+
     const [request, response, promptAsync] = Google.useAuthRequest({
         expoClientId: '741920079969-shfcjka54slncmjhetb0m023b0fgn168.apps.googleusercontent.com',
-        iosClientId:'741920079969-o56gu4c5cur60ctfcgp2cpb75ld2sgjp.apps.googleusercontent.com',
-        androidClientId:"741920079969-h8dkjg7qsdf0mtgfcors4qrhf5v3i5no.apps.googleusercontent.com"
-        // Add android and ios client IDs if you have them
+        iosClientId: '741920079969-o56gu4c5cur60ctfcgp2cpb75ld2sgjp.apps.googleusercontent.com',
+        androidClientId: "741920079969-h8dkjg7qsdf0mtgfcors4qrhf5v3i5no.apps.googleusercontent.com"
     });
-    //Making the authorisation functions that link to firebase database
-    const signUp=async(email,password,role='customer')=>{
-        const res=await createUserWithEmailAndPassword(auth,email,password);
-        const user=res.user;
-        await setDoc (doc(db,'users',user.uid),
-    {
-        email:user.email,
-        role:role,//'vendor' or 'customer'
-        createdAt:new Date()
-    })
-    return res
-    }
-    const logIn=async(email,password)=>{
-        const res=await signInWithEmailAndPassword(auth,email,password);
-        const user= res.user;
-        const docRef=doc(db,'users',user.uid);
-        const docSnap=await getDoc(docRef);
-        if (docSnap.exists()){
-            setIsVendor(docSnap.data().role==='vendor');
-        }
-        return res
-    }
-    const logOut=()=>{return signOut(auth)}
-    //Change the state of the component to unsubscribe
+
     useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-        try {
+        const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
             if (user) {
                 const docRef = doc(db, 'users', user.uid);
                 const docSnap = await getDoc(docRef);
@@ -66,98 +44,66 @@ export function AuthProvider({children}){
                 }
             }
             setCurrentUser(user);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            // This MUST run to remove the white screen
             setLoading(false);
-        }
-    });
-    return unsubscribe;
-}, []);
-    const googleLogin=async()=>{
+        });
+        return unsubscribe;
+    }, []);
+
+    const signUp = async (email, password, role = 'customer') => {
+        const res = await createUserWithEmailAndPassword(authInstance, email, password);
+        await setDoc(doc(db, 'users', res.user.uid), {
+            email: res.user.email,
+            role: role,
+            createdAt: new Date()
+        });
+        return res;
+    };
+
+    const logIn = async (email, password) => {
+        const res = await signInWithEmailAndPassword(authInstance, email, password);
+        return res;
+    };
+
+    const logOut = () => signOut(authInstance);
+
+    const sendOTP = async (phoneNumber) => {
         try {
-        const result=await promptAsync();
-        if (result?.type==='success'){
-            const credential=
-            GoogleAuthProvider.credential(result.params.id_token);
-            const userCredential=await signInWithCredential(auth,credential);
-            const ref=doc(db,'users',userCredential.user.uid);
-            const snap=await getDoc(ref);
-            if(!snap.exists()){
-                await setDoc(ref,{role:'customer',createdAt:new Date()});
-            }
-        }} catch (error) {
-            console.error("Google Login Error:", error);
-        }
-    };
-    const appleLogin = async () => {
-    if (Platform.OS !== 'ios') return;
-    try {
-        const credential = await AppleAuthentication.signInAsync({
-            requestedScopes: [
-                AppleAuthentication.AppleAuthenticationScope.EMAIL,
-                AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-            ],
-        });
-
-        // FIX: Use OAuthProvider for Apple, NOT GoogleAuthProvider
-        const provider = new OAuthProvider('apple.com');
-        const authCredential = provider.credential({
-            idToken: credential.identityToken,
-        });
-
-        const userCredential = await signInWithCredential(auth, authCredential);
-
-        // Save role if new user
-        const ref = doc(db, 'users', userCredential.user.uid);
-        const snap = await getDoc(ref);
-        if (!snap.exists()) {
-            await setDoc(ref, { role: 'customer', createdAt: new Date() });
-        }
-    } catch (e) {
-        console.error("Apple Login Error:", e);
-    }
-};
-    const sendOTP=async(phoneNumber)=>{
-        try{
-            //Configure invisible reCAPTCHA
-            const verifier=new RecaptchaVerifier('recaptcha-container',{
-                size:'invisible',
-                callback:()=>{}
-            },auth);
-            const confirmation=await signInWithPhoneNumber(auth,phoneNumber,verifier);
-            return confirmation; //confirmationResult for OTP code
-        }catch(err){
-            console.log(err);
+            // FIX: Pass 'authInstance' as the FIRST argument to resolve 'prototype of undefined'
+            const verifier = new RecaptchaVerifier(authInstance, 'recaptcha-container', {
+                size: 'invisible',
+            });
+            const confirmation = await signInWithPhoneNumber(authInstance, phoneNumber, verifier);
+            return confirmation;
+        } catch (err) {
+            console.error("Send OTP Error:", err);
             throw err;
         }
     };
-    const verifyOTP=async(confirmationResult,code)=>{
-        try{
-            await confirmationResult.confirm(code);
-        } catch(err){
-            console.log(err);
+
+    const verifyOTP = async (confirmationResult, code) => {
+        try {
+            const result = await confirmationResult.confirm(code);
+            return result;
+        } catch (err) {
+            console.error("Verify OTP Error:", err);
             throw err;
         }
     };
-    //Expose the value to the provider
-    const value={
+
+    const value = {
         currentUser,
         signUp,
         logIn,
         logOut,
-        setIsVendor,
-        //Check role(vendor or consumer)
         isVendor,
-        googleLogin,
-        appleLogin,
+        googleLogin: promptAsync,
         sendOTP,
         verifyOTP
-    }
-    return(
+    };
+
+    return (
         <AuthContext.Provider value={value}>
             {!loading && children}
         </AuthContext.Provider>
-    )
+    );
 }
